@@ -1,0 +1,36 @@
+<% include ./partials/header %>
+
+<!--link href="/stylesheets/style.css" rel="stylesheet"-->
+<style type="text/css">
+  @import url("/styles/login.css");
+</style>
+
+
+	<h1>Login</h1>
+
+<div id="loginForm" class="container">
+	<a href="/"> Home </a> <span class = "fa fa-home"/> </span>
+	<form id="loginFor" method="POST" action=/user/login >
+		<div class="panel">
+			<h2>User Login</h2>
+			<p>Please enter your email/id and password</p>
+		</div>
+		<div>
+			<p></p>
+			<p><input placeholder="ID / Email address" type="text" name="username" required/></p>
+			<p></p>
+			<p><input placeholder="Password" name="password" type="password"/></p>
+		</div>
+
+		<div>
+			<input type="submit" value="Submit" id="submitBtn">
+		</div>
+		<div class="container">
+			<span class="forgot-psw"><a href="/user/forgot" >Forgot password?</a></span>
+		</div>
+	</form>
+</div>
+
+</body>
+
+</html>
