@@ -1,6 +1,7 @@
+//  configuration
 process.env.TZ = 'Asia/Calcutta';
 process.env.SESSIONSECRET = "jkresgbkhsebkhuegrsh ifenbio node js todo app";
-
+process.env.ADMINCODE = 'asyncpromise';
 let env = process.env.NODE_ENV || 'development';
 if (env === 'development') {
     process.env.MONGODBURL = 'mongodb+srv://td-uo:bXH8RsVumEq5gxSa@cluster0-lhrxx.mongodb.net/td?retryWrites=true';
@@ -10,7 +11,6 @@ if (env === 'development') {
 
 const express = require("express"),
     app = express(),
-    bodyParser = require("body-parser"),
     mongoose = require("mongoose"),
     passport = require("passport"),
     LocalStrategy = require("passport-local"),

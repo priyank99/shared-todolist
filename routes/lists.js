@@ -155,36 +155,6 @@ router.post('/', middleware.isLoggedIn, function (req, res) {
 });
 
 router.delete("/:id", middleware.isLoggedIn, function (req, res) {
-
-  acl.isAllowed(req.user._id.toString(), req.params.id.toString(), 'delete', function (err, allowed) {
-    if (allowed) {
-      console.log("user " + req.user._id.toString() + ' allowed to ' + 'delete' + req.params.id.toString())
-      acl.allowedPermissions(req.user._id.toString(), req.params.id.toString(), function (err, permissions) {
-        console.log(permissions)
-      })
-
-      List.findOneAndRemove({
-          '_id': req.params.id,
-        }).then(response => {
-          req.flash("success", "list deleted!");
-          console.log("deleted list ");
-          console.log(response);
-          res.json(response);
-        })
-        .catch(err => {
-          req.flash("error", "del error");
-          console.error(err);
-          res.redirect("/user/login");
-        });
-
-    } else {
-      console.log("else not allowed");
-      return res.status(403).send();
-    }
-  });
-
-});
-router.delete("/:id", middleware.isLoggedIn, function (req, res) {
   List.findOneAndRemove({
       ownerId: req.user._id,
       '_id': req.params.id,
@@ -206,14 +176,14 @@ router.delete("/:id", middleware.isLoggedIn, function (req, res) {
       User.updateMany(criteria, action, {
           safe: true
         },
-        function (err, users) {
+        function (err, result) {
           if (err) {
             console.log(err);
             return res.status(400).send('invalid request');
           } else {
-            console.log(users);
+            console.log(result);
             console.log("deleted list ");
-            console.log(del_list);
+            //console.log(del_list);
             res.json(del_list);
           }
         }
@@ -280,27 +250,26 @@ router.get('/:id/todos', middleware.isLoggedIn, function (req, res) {
 
 });
 
-router.get('/:id/todossort', middleware.isLoggedIn, function (req, res) {
+router.get('/:id/todos/:todoid', middleware.isLoggedIn, function (req, res) {
+
   List.findById(req.params.id, function (err, list) {
     if (err) {
       console.log(err);
       return res.status(400).send('invalid request');
-    }
-    if (!list) {
-      console.log("not found");
-      return res.send(new Error('Could not load Document'));
-    }
-    if (!(list.ownerId.equals(req.user._id))) {
-      return res.status(403).send();
+    } else if (list) {
+
+      acl.isAllowed(req.user._id.toString(), req.params.id.toString(), 'read', function (err, allowed) {
+        if (allowed) {
+          console.log("user " + req.user._id.toString() + ' allowed to ' + 'read' + req.params.id.toString())
+          console.log(list.itemList.id(req.params.todoid));
+          return res.json(list.itemList.id(req.params.todoid));
+        } else {
+          return res.status(401).send();
+        }
+      });
+
     } else {
-
-      let listLength = list.itemList.length;
-      for (let i = 0; i < listLength; i++) {
-        list.itemList[i].orderedId = i + 1;
-        //console.log(list.itemList[i]);
-      }
-
-      res.json(list.itemList);
+      return res.status(404).send();
     }
   });
 
@@ -565,7 +534,7 @@ router.post('/grant/:id/', middleware.isLoggedIn, function (req, res) {
 
         } else {
           console.log("else not allowed");
-          return res.status(403).send();
+          return res.status(401).send();
         }
       });
 
@@ -605,7 +574,7 @@ router.post('/revoke/:id/', middleware.isLoggedIn, function (req, res) {
             });
         } else {
           console.log("else not allowed");
-          return res.status(403).send();
+          return res.status(401).send();
         }
       });
 

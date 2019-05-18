@@ -2,6 +2,7 @@ const node_acl = require('acl');
 const mongoose = require("mongoose"),
     List = require("./models/list"),
     User = require("./models/user");
+const async = require('async');
 
 const allRoles = ['owner', 'add', 'read', 'order', 'edit', 'delete'];
 
@@ -37,41 +38,28 @@ function grantAcess(acl, userId, role, listIdstr) {
                     if (err) {
                         reject(err);
                     }
-                    User.findByIdAndUpdate(userId, {
-                            $addToSet: {
-                                all_lists: listIdstr
-                            }
-                        }, {
-                            safe: true,
-                            upsert: true
+
+                    async.parallel({
+                        addlist: function (cb) {
+                            User.findByIdAndUpdate(userId, {$addToSet: {all_lists: listIdstr}
+                                }, {safe: true,
+                                    upsert: true}, cb);
                         },
-                        function (err, user) {
-                            if (err) {
-                                console.log(err);
-                                reject(err);
-                            } else {
-                                //  CHANGE: use Promise.All
-                                List.findByIdAndUpdate(listIdstr, {
-                                        $addToSet: {
-                                            collaborators: userId
-                                        }
-                                    }, {
-                                        safe: true,
-                                        upsert: true
-                                    },
-                                    function (err, list) {
-                                        if (err) {
-                                            console.log(err);
-                                            reject(err);
-                                        } else {
-                                            console.log(permissions)
-                                            resolve(permissions);
-                                        }
-                                    }
-                                );
-                            }
+                        addcollaborator: function (cb) {
+                            List.findByIdAndUpdate(listIdstr, { $addToSet: {collaborators: userId}
+                                }, {safe: true,
+                                    upsert: true}, cb);
                         }
-                    );
+                    }, function (err, results) {
+                        if (err) {
+                            console.log(err);
+                            reject(err);
+                        }
+                        else{
+                            console.log(permissions)
+                            resolve(permissions);
+                        }
+                    });
 
                 });
             });
@@ -91,46 +79,33 @@ function revokeAcess(acl, userId, role, listIdstr) {
                     if (err) {
                         reject(err);
                     }
+
                     console.log(permissions);
                     console.log(permissions[listIdstr].length == 0);
                     if (permissions[listIdstr].length == 0) {
-                        User.findByIdAndUpdate(userId, {
-                                $pull: {
-                                    all_lists: listIdstr
-                                }
-                            }, {
-                                safe: true,
-                                upsert: true
+                        async.parallel({
+                            removelist: function (cb) {
+                                User.findByIdAndUpdate(userId, {$pull: {all_lists: listIdstr}
+                                    }, {safe: true,
+                                        upsert: true}, cb);
                             },
-                            function (err, user) {
-                                if (err) {
-                                    console.log(err);
-                                    reject(err);
-                                } else {
-                                    //  CHANGE: use Promise.All
-                                    List.findByIdAndUpdate(listIdstr, {
-                                            $pull: {
-                                                collaborators: userId
-                                            }
-                                        }, {
-                                            safe: true,
-                                            upsert: true
-                                        },
-                                        function (err, list) {
-                                            if (err) {
-                                                console.log(err);
-                                                reject(err);
-                                            } else {
-                                                console.log('removed collaborator '+ userId.toString()+' from '+listIdstr);
-                                                resolve(permissions);
-                                            }
-                                        }
-                                    );
-                                }
+                            removecollaborator: function (cb) {
+                                List.findByIdAndUpdate(listIdstr, { $pull: {collaborators: userId}
+                                    }, {safe: true,
+                                        upsert: true}, cb);
                             }
-                        ); 
+                        }, function (err, results) {
+                            if (err) {
+                                console.log(err);
+                                reject(err);
+                            }
+                            else{
+                                console.log('removed collaborator ' + userId.toString() + ' from ' + listIdstr);
+                                resolve(permissions);
+                            }
+                        });
                     }
-                    else{
+                    else {
                         resolve(permissions);
                     }
                 });
