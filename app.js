@@ -7,6 +7,8 @@ if (env === 'development') {
     process.env.MONGODBURL = 'mongodb+srv://td-uo:bXH8RsVumEq5gxSa@cluster0-lhrxx.mongodb.net/td?retryWrites=true';
 } else if (env === 'test') {
     process.env.MONGODBURL = 'mongodb+srv://td-uo:bXH8RsVumEq5gxSa@cluster0-lhrxx.mongodb.net/todotest?retryWrites=true';
+} else if (env === 'production') {
+    process.env.MONGODBURL = 'mongodb+srv://td-uo:bXH8RsVumEq5gxSa@cluster0-lhrxx.mongodb.net/todoapp?retryWrites=true';
 }
 
 const express = require("express"),
@@ -31,7 +33,7 @@ mongoose.connect(process.env.MONGODBURL, {
     if (err) {
         console.log("Mongoose: connection err \n" + err);
     } else {
-        console.log('connected to '+process.env.MONGODBURL);
+        console.log('connected to ' + process.env.MONGODBURL);
     }
 });
 

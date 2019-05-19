@@ -4,9 +4,7 @@ const express = require("express"),
   List = require("../models/list"),
   User = require("../models/user");
 
-var authorize = require("../authorization"),
-  writeAcessRoles = require("../authorization").writeAcessRoles,
-  grantAcess = require("../authorization").grantAcess;
+const authorize = require("../authorization");
 
 /*
 #show lists
@@ -45,6 +43,7 @@ var authorize = require("../authorization"),
 
 */
 function sortByOrderId(ilistA, ilistB) {
+  // compare function for sorting todos
   console.log(ilistA);
   console.log(ilistB);
   let x = ilistA.orderedId;
@@ -60,13 +59,13 @@ authorize.PromiseAcl().then(function (aclobj) {
 }));
 
 router.get('/all', middleware.isLoggedIn, function (req, res) {
-
+// all lists that user has access to
   User.findById(req.user._id, function (err, user) {
     if (err) {
       console.log(err);
       return res.status(500).send();
     }
-    console.log(user);
+    //console.log(user);
     List.find({
       '_id': {
         $in: user.all_lists
@@ -76,7 +75,7 @@ router.get('/all', middleware.isLoggedIn, function (req, res) {
         console.log(err);
         return res.status(400).send('invalid request');
       } else {
-        console.log(lists);
+        //console.log(lists);
         return res.json(lists);
       }
     })
@@ -88,13 +87,13 @@ router.get('/all', middleware.isLoggedIn, function (req, res) {
 router.get("/create", middleware.isLoggedIn, (req, res) => res.render("index"));
 
 router.get('/', middleware.isLoggedIn, function (req, res) {
-
+// lists created by user
   List.find({
     ownerId: req.user._id
   }).lean().exec(function (err, lists) {
     if (err) {
       console.log(err);
-      return res.status(400).send('invalid request');
+      return res.status(500).send('internal error');
     } else {
       //console.log(lists);
       res.json(lists);
@@ -107,9 +106,10 @@ router.get('/:id', middleware.isLoggedIn, function (req, res) {
 
     if (err) {
       console.log(err);
+      // it may not be a valid 12 byte id, cannot be cast into mongo objectId
       return res.status(400).send('invalid request');
     } else if (list) {
-      console.log("else ift");
+      console.log("list found");
 
       acl.isAllowed(req.user._id.toString(), list._id.toString(), 'read', function (err, allowed) {
         if (allowed) {
@@ -119,12 +119,12 @@ router.get('/:id', middleware.isLoggedIn, function (req, res) {
           })
           return res.json(list);
         } else {
-          console.log("else not");
+          console.log("unauthorized: read list");
           return res.status(401).send();
         }
       });
-
     } else {
+      // id is valid but list does not exist
       return res.status(404).send();
     }
   });
@@ -132,22 +132,22 @@ router.get('/:id', middleware.isLoggedIn, function (req, res) {
 });
 
 router.post('/', middleware.isLoggedIn, function (req, res) {
-
-  console.log(acl.allow);
+  // create new list
   let newlist = {
     name: req.body.name,
     ownerId: req.user._id,
   }
 
-  console.log(newlist);
   List.create(newlist, function (err, list) {
     if (err) {
       console.log(err);
+      // it may not be a valid 12 byte id, cannot be cast into mongo objectId
       return res.status(400).send('invalid request');
     } else {
-      writeAcessRoles(acl, list._id.toString());
-      grantAcess(acl, list.ownerId, 'owner', list._id.toString());
-
+      console.log(newlist);
+      // create db records for storing authorization info
+      authorize.writeAcessRoles(acl, list._id.toString());
+      authorize.grantAcess(acl, list.ownerId, 'owner', list._id.toString());  // user who creates the list is owner
       return res.json(list);
     }
   });
@@ -158,45 +158,49 @@ router.delete("/:id", middleware.isLoggedIn, function (req, res) {
   List.findOneAndRemove({
       ownerId: req.user._id,
       '_id': req.params.id,
-    }).then(function (del_list) {
-      req.flash("success", "list deleted!");
+    }, function (err, del_list) {
+      if (err) {
+        console.log(err);
+        return res.status(400).send('invalid request');
+      }
+      if (!del_list) {
+        console.log("delete list: not found");
+        return res.status(404).send('list does not exist');
+      } 
+      else{
+        req.flash("success", "list deleted!");
 
-      console.log('del_list.collaborators');
-      console.log(del_list.collaborators);
-      let criteria = {
-        '_id': {
-          $in: del_list.collaborators
-        }
-      };
-      let action = {
-        $pull: {
-          all_lists: del_list._id
-        }
-      };
-      User.updateMany(criteria, action, {
-          safe: true
-        },
-        function (err, result) {
-          if (err) {
-            console.log(err);
-            return res.status(400).send('invalid request');
-          } else {
-            console.log(result);
-            console.log("deleted list ");
-            //console.log(del_list);
-            res.json(del_list);
+        console.log('deleted list\'s collaborators');
+        console.log(del_list.collaborators);
+        let criteria = {
+          '_id': {
+            $in: del_list.collaborators
           }
-        }
-      )
-
-
-    })
-    .catch(err => {
-      req.flash("error", "del error");
-      console.error(err);
-      res.redirect("/user/login");
-
+        };
+        let action = {
+          $pull: {
+            all_lists: del_list._id
+          }
+        };
+        // remove that list from all collaborators' records
+        User.updateMany(criteria, action, {
+            safe: true
+          },
+          function (err, result) {
+            if (err) {
+              console.log(err);
+              return res.status(400).send('invalid request');
+            } else {
+              console.log(result);
+              console.log("deleted list ");
+              //console.log(del_list);
+              res.json(del_list);
+            }
+          }
+        )
+      }
     });
+
 });
 
 router.put("/:id", middleware.isLoggedIn, function (req, res) {
@@ -210,7 +214,7 @@ router.put("/:id", middleware.isLoggedIn, function (req, res) {
       return res.status(400).send('invalid request');
     }
     if (!list) {
-      console.log("not found tp up");
+      console.log("update list: not found");
       return res.status(404).send('list does not exist');
     } else {
       console.log("updated");
@@ -238,13 +242,13 @@ router.get('/:id/todos', middleware.isLoggedIn, function (req, res) {
           console.log(list.itemList);
           return res.json(list.itemList);
         } else {
-          console.log("else not");
+          console.log("unauthorized: read todos");
           return res.status(401).send();
         }
       });
 
     } else {
-      return res.status(404).send();
+      return res.status(404).send('list does not exist');
     }
   });
 
@@ -261,15 +265,21 @@ router.get('/:id/todos/:todoid', middleware.isLoggedIn, function (req, res) {
       acl.isAllowed(req.user._id.toString(), req.params.id.toString(), 'read', function (err, allowed) {
         if (allowed) {
           console.log("user " + req.user._id.toString() + ' allowed to ' + 'read' + req.params.id.toString())
-          console.log(list.itemList.id(req.params.todoid));
-          return res.json(list.itemList.id(req.params.todoid));
+          if(list.itemList.id(req.params.todoid)){      // check that :todoid exists in list
+            console.log(list.itemList.id(req.params.todoid));
+            return res.json(list.itemList.id(req.params.todoid));
+          }
+          else{
+            console.log("get-td: todo not found");
+            return res.status(404).send('not found: todo');
+          }
         } else {
           return res.status(401).send();
         }
       });
 
     } else {
-      return res.status(404).send();
+      return res.status(404).send('list does not exist');
     }
   });
 
@@ -313,7 +323,7 @@ router.post('/:id/todos', middleware.isLoggedIn, function (req, res) {
           });
 
         } else {
-          console.log("else not");
+          console.log("unauthorized: add todo");
           return res.status(401).send();
         }
       });
@@ -340,14 +350,14 @@ router.delete('/:id/todos/:todoid', middleware.isLoggedIn, function (req, res) {
             console.log(permissions)
           })
 
-          if (list.itemList.id(req.params.todoid)) {
+          if (list.itemList.id(req.params.todoid)) {  // check that :todoid exists in list
             list.itemList.id(req.params.todoid).remove();
             list.numItems -= 1;
-
+            // reassign positions from 1..n to items in list after deletion
             let listLength = list.itemList.length;
             for (let i = 0; i < listLength; i++) {
               list.itemList[i].orderedId = i + 1;
-              console.log(list.itemList[i]);
+              //console.log(list.itemList[i]);
             }
 
             list.save(function (err) {
@@ -364,7 +374,7 @@ router.delete('/:id/todos/:todoid', middleware.isLoggedIn, function (req, res) {
           }
 
         } else {
-          console.log("else not");
+          console.log("unauthorized: delete");
           return res.status(401).send();
         }
       });
@@ -392,7 +402,7 @@ router.put('/:id/todos/:todoid', middleware.isLoggedIn, function (req, res) {
           })
 
           if (list.itemList.id(req.params.todoid)) {
-
+            // check what changes are required
             if (req.body.text)
               list.itemList.id(req.params.todoid).text = req.body.text;
             if (req.body.done)
@@ -400,6 +410,7 @@ router.put('/:id/todos/:todoid', middleware.isLoggedIn, function (req, res) {
             if (req.body.orderedId)
               list.itemList.id(req.params.todoid).orderedId = req.body.orderedId;
             console.log(list.itemList.id(req.params.todoid));
+            // sort the list to change position as given by orderedId
             list.itemList.sort(sortByOrderId);
             console.log(list);
 
@@ -412,12 +423,12 @@ router.put('/:id/todos/:todoid', middleware.isLoggedIn, function (req, res) {
               }
             });
           } else {
-            console.log("upd-td: todo not found");
+            console.log("edit-td: todo not found");
             return res.status(404).send('not found: todo');
           }
 
         } else {
-          console.log("else not");
+          console.log("unauthorized: edit todos");
           return res.status(401).send();
         }
       });
@@ -458,6 +469,7 @@ router.post('/:id/todos/:todoid/reorder', middleware.isLoggedIn, function (req, 
               console.log(list.itemList.id(req.params.todoid));
               console.log(curIdx);
               console.log(targetIdx);
+              // move todo using splice operation
               list.itemList.splice(targetIdx, 0, list.itemList.splice(curIdx, 1)[0]);
 
               console.log("list before sort");
@@ -484,7 +496,7 @@ router.post('/:id/todos/:todoid/reorder', middleware.isLoggedIn, function (req, 
           }
 
         } else {
-          console.log("else not");
+          console.log("unauthorized: reorder");
           return res.status(401).send();
         }
       });
@@ -533,7 +545,7 @@ router.post('/grant/:id/', middleware.isLoggedIn, function (req, res) {
             });
 
         } else {
-          console.log("else not allowed");
+          console.log("unauthorized: grant");
           return res.status(401).send();
         }
       });
@@ -573,7 +585,7 @@ router.post('/revoke/:id/', middleware.isLoggedIn, function (req, res) {
               return res.status(500).send();
             });
         } else {
-          console.log("else not allowed");
+          console.log("unauthorized: revoke");
           return res.status(401).send();
         }
       });
